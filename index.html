@@ -240,45 +240,54 @@
         }
 
         function addToSearchHistory(searchTerm) {
-            let history = JSON.parse(localStorage.getItem('searchHistory')) || [];
-            history.unshift(searchTerm);
-            history = history.slice(0, 5); // Keep only the last 5 searches
-            localStorage.setItem('searchHistory', JSON.stringify(history));
-            displaySearchHistory();
-        }
+    let history = JSON.parse(localStorage.getItem('searchHistory')) || [];
+    
+    // Ta bort eventuell existerande förekomst av söktermen
+    history = history.filter(term => term.toLowerCase() !== searchTerm.toLowerCase());
+    
+    // Lägg till den nya söktermen först i listan
+    history.unshift(searchTerm);
+    
+    // Begränsa historiken till de senaste 5 unika söktermerna
+    history = history.slice(0, 5);
+    
+    localStorage.setItem('searchHistory', JSON.stringify(history));
+    displaySearchHistory();
+}
 
-        function displaySearchHistory() {
-            const historyList = document.getElementById('historyList');
-            historyList.innerHTML = '';
-            const history = JSON.parse(localStorage.getItem('searchHistory')) || [];
-            
-            history.forEach((term, index) => {
-                const li = document.createElement('li');
-                li.className = 'list-group-item d-flex justify-content-between align-items-center';
-                li.textContent = term;
-                
-                const buttonGroup = document.createElement('div');
-                
-                const searchButton = document.createElement('button');
-                searchButton.className = 'btn btn-sm btn-outline-primary me-2';
-                searchButton.innerHTML = '<i class="fas fa-search"></i>';
-                searchButton.onclick = function() {
-                    document.getElementById('searchTerm').value = term;
-                    handleSearch();
-                };
-                
-                const deleteButton = document.createElement('button');
-                deleteButton.className = 'btn btn-sm btn-outline-danger';
-                deleteButton.innerHTML = '<i class="fas fa-times"></i>';
-                deleteButton.onclick = function() {
-                    removeFromSearchHistory(index);
-                };
-                
-                buttonGroup.appendChild(searchButton);
-                buttonGroup.appendChild(deleteButton);
-                li.appendChild(buttonGroup);
-                historyList.appendChild(li);
-            });
+function displaySearchHistory() {
+    const historyList = document.getElementById('historyList');
+    historyList.innerHTML = '';
+    const history = JSON.parse(localStorage.getItem('searchHistory')) || [];
+    
+    history.forEach((term, index) => {
+        const li = document.createElement('li');
+        li.className = 'list-group-item d-flex justify-content-between align-items-center';
+        li.textContent = term;
+        
+        const buttonGroup = document.createElement('div');
+        
+        const searchButton = document.createElement('button');
+        searchButton.className = 'btn btn-sm btn-outline-primary me-2';
+        searchButton.innerHTML = '<i class="fas fa-search"></i>';
+        searchButton.onclick = function() {
+            document.getElementById('searchTerm').value = term;
+            handleSearch();
+        };
+        
+        const deleteButton = document.createElement('button');
+        deleteButton.className = 'btn btn-sm btn-outline-danger';
+        deleteButton.innerHTML = '<i class="fas fa-times"></i>';
+        deleteButton.onclick = function() {
+            removeFromSearchHistory(index);
+        };
+        
+        buttonGroup.appendChild(searchButton);
+        buttonGroup.appendChild(deleteButton);
+        li.appendChild(buttonGroup);
+        historyList.appendChild(li);
+    });
+}
         }
 
         function removeFromSearchHistory(index) {
