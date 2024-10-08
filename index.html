@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Avancerad Multi Search Tool</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f8f9fa;
+            transition: background-color 0.3s ease;
+        }
+        .search-card {
+            width: 100%;
+            max-width: 600px;
+            padding: 2rem;
+            background-color: #ffffff;
+            border-radius: 1rem;
+            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+            transition: background-color 0.3s ease;
+        }
+        .btn-search {
+            transition: all 0.3s ease;
+        }
+        .btn-search:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.2);
+        }
+        .form-check-input:checked {
+            background-color: #0d6efd;
+            border-color: #0d6efd;
+        }
+        .dark-mode {
+            background-color: #333;
+            color: #fff;
+        }
+        .dark-mode .search-card {
+            background-color: #444;
+            color: #fff;
+        }
+        .dark-mode .form-control,
+        .dark-mode .form-select {
+            background-color: #555;
+            color: #fff;
+            border-color: #666;
+        }
+        .dark-mode .list-group-item {
+            background-color: #555;
+            color: #fff;
+            border-color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="search-card">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Multi Search Tool</h1>
+            <button id="themeToggle" class="btn btn-outline-primary">
+                <i class="fas fa-moon"></i> Mörkt läge
+            </button>
+        </div>
+        <form id="searchForm">
+            <div class="mb-3">
+                <label for="searchTerm" class="form-label">Sökord:</label>
+                <input type="text" id="searchTerm" name="searchTerm" class="form-control" required>
+            </div>
+            <div class="mb-3">
+                <label for="location" class="form-label">Plats:</label>
+                <select id="location" name="location" class="form-select">
+                    <option value="">Hela Sverige</option>
+                    <option value="stockholm">Stockholm</option>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Prisintervall:</label>
+                <div class="d-flex">
+                    <input type="number" id="minPrice" name="minPrice" class="form-control me-2" placeholder="Min">
+                    <input type="number" id="maxPrice" name="maxPrice" class="form-control" placeholder="Max">
+                </div>
+            </div>
+            <div class="mb-3">
+                <div class="form-check">
+                    <input type="checkbox" id="sortRecent" name="sortRecent" class="form-check-input">
+                    <label class="form-check-label" for="sortRecent">Sortera efter senaste</label>
+                </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Välj sökplatser:</label>
+                <div class="form-check">
+                    <input type="checkbox" id="blocket" name="searchSites" value="blocket" class="form-check-input" checked>
+                    <label class="form-check-label" for="blocket">Blocket</label>
+                </div>
+                <div class="form-check">
+                    <input type="checkbox" id="tradera" name="searchSites" value="tradera" class="form-check-input" checked>
+                    <label class="form-check-label" for="tradera">Tradera</label>
+                </div>
+                <div class="form-check">
+                    <input type="checkbox" id="facebook" name="searchSites" value="facebook" class="form-check-input" checked>
+                    <label class="form-check-label" for="facebook">Facebook Marketplace</label>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary w-100 btn-search">
+                <i class="fas fa-search me-2"></i> Sök
+            </button>
+        </form>
+        <div id="searchHistory" class="mt-4">
+            <div class="d-flex justify-content-between align-items-center">
+                <h5>Sökhistorik:</h5>
+                <button id="clearAllHistory" class="btn btn-sm btn-outline-danger">
+                    <i class="fas fa-trash-alt"></i> Rensa allt
+                </button>
+            </div>
+            <ul id="historyList" class="list-group mt-2"></ul>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            loadPreviousSettings();
+            displaySearchHistory();
+            document.getElementById('clearAllHistory').addEventListener('click', clearAllSearchHistory);
+        });
+
+        document.getElementById('searchForm').addEventListener('submit', function (event) {
+            event.preventDefault();
+            handleSearch();
+        });
+
+        document.getElementById('themeToggle').addEventListener('click', function() {
+            document.body.classList.toggle('dark-mode');
+            const icon = this.querySelector('i');
+            if (document.body.classList.contains('dark-mode')) {
+                icon.classList.replace('fa-moon', 'fa-sun');
+                this.querySelector('i').nextSibling.textContent = ' Ljust läge';
+                localStorage.setItem('darkMode', 'true');
+            } else {
+                icon.classList.replace('fa-sun', 'fa-moon');
+                this.querySelector('i').nextSibling.textContent = ' Mörkt läge';
+                localStorage.setItem('darkMode', 'false');
+            }
+        });
+
+        function loadPreviousSettings() {
+            const savedSearchTerm = localStorage.getItem('searchTerm');
+            const savedSortRecent = localStorage.getItem('sortRecent') === 'true';
+            const savedSearchSites = JSON.parse(localStorage.getItem('searchSites')) || ['blocket', 'tradera', 'facebook'];
+            const savedLocation = localStorage.getItem('location');
+            const savedMinPrice = localStorage.getItem('minPrice');
+            const savedMaxPrice = localStorage.getItem('maxPrice');
+            const savedDarkMode = localStorage.getItem('darkMode') === 'true';
+            
+            if (savedSearchTerm) {
+                document.getElementById('searchTerm').value = savedSearchTerm;
+            }
+            document.getElementById('sortRecent').checked = savedSortRecent;
+            if (savedLocation) {
+                document.getElementById('location').value = savedLocation;
+            }
+            if (savedMinPrice) {
+                document.getElementById('minPrice').value = savedMinPrice;
+            }
+            if (savedMaxPrice) {
+                document.getElementById('maxPrice').value = savedMaxPrice;
+            }
+            
+            savedSearchSites.forEach(site => {
+                document.getElementById(site).checked = true;
+            });
+
+            if (savedDarkMode) {
+                document.body.classList.add('dark-mode');
+                document.getElementById('themeToggle').innerHTML = '<i class="fas fa-sun"></i> Ljust läge';
+            }
+        }
+
+        function handleSearch() {
+            const searchTerm = document.getElementById('searchTerm').value;
+            const sortRecent = document.getElementById('sortRecent').checked;
+            const searchSites = Array.from(document.querySelectorAll('input[name="searchSites"]:checked')).map(el => el.value);
+            const location = document.getElementById('location').value;
+            const minPrice = document.getElementById('minPrice').value;
+            const maxPrice = document.getElementById('maxPrice').value;
+
+            localStorage.setItem('searchTerm', searchTerm);
+            localStorage.setItem('sortRecent', sortRecent);
+            localStorage.setItem('searchSites', JSON.stringify(searchSites));
+            localStorage.setItem('location', location);
+            localStorage.setItem('minPrice', minPrice);
+            localStorage.setItem('maxPrice', maxPrice);
+
+            if (searchTerm) {
+                const urls = getUrls(searchTerm, sortRecent, searchSites, location, minPrice, maxPrice);
+                urls.forEach(url => window.open(url, '_blank'));
+                addToSearchHistory(searchTerm);
+            }
+        }
+
+        function getUrls(searchTerm, sortRecent, searchSites, location, minPrice, maxPrice) {
+            const encodedTerm = encodeURIComponent(searchTerm);
+            const urls = [];
+
+            if (searchSites.includes('blocket')) {
+                let blocketUrl = 'https://www.blocket.se';
+                if (location === 'stockholm') {
+                    blocketUrl += '/annonser/stockholm/hela_stockholm';
+                } else {
+                    blocketUrl += '/annonser/hela_sverige';
+                }
+                blocketUrl += `?q=${encodedTerm}`;
+                if (sortRecent) blocketUrl += '&sort=date';
+                if (minPrice) blocketUrl += `&price_start=${minPrice}`;
+                if (maxPrice) blocketUrl += `&price_end=${maxPrice}`;
+                if (location === 'stockholm') blocketUrl += '&r=11';
+                urls.push(blocketUrl);
+            }
+            
+            if (searchSites.includes('tradera')) {
+                let traderaUrl = `https://www.tradera.com/search?q=${encodedTerm}`;
+                if (sortRecent) traderaUrl += '&sortBy=AddedOn';
+                if (location === 'stockholm') traderaUrl += '&location=Stockholm';
+                if (minPrice) traderaUrl += `&fromPrice=${minPrice}`;
+                if (maxPrice) traderaUrl += `&toPrice=${maxPrice}`;
+                urls.push(traderaUrl);
+            }
+            
+            if (searchSites.includes('facebook')) {
+                let facebookUrl = `https://www.facebook.com/marketplace/stockholm/search?query=${encodedTerm}&exact=false`;
+                if (sortRecent) facebookUrl += '&daysSinceListed=7';
+                if (minPrice) facebookUrl += `&minPrice=${minPrice}`;
+                if (maxPrice) facebookUrl += `&maxPrice=${maxPrice}`;
+                urls.push(facebookUrl);
+            }
+
+            return urls;
+        }
+
+        function addToSearchHistory(searchTerm) {
+            let history = JSON.parse(localStorage.getItem('searchHistory')) || [];
+            history.unshift(searchTerm);
+            history = history.slice(0, 5); // Keep only the last 5 searches
+            localStorage.setItem('searchHistory', JSON.stringify(history));
+            displaySearchHistory();
+        }
+
+        function displaySearchHistory() {
+            const historyList = document.getElementById('historyList');
+            historyList.innerHTML = '';
+            const history = JSON.parse(localStorage.getItem('searchHistory')) || [];
+            
+            history.forEach((term, index) => {
+                const li = document.createElement('li');
+                li.className = 'list-group-item d-flex justify-content-between align-items-center';
+                li.textContent = term;
+                
+                const buttonGroup = document.createElement('div');
+                
+                const searchButton = document.createElement('button');
+                searchButton.className = 'btn btn-sm btn-outline-primary me-2';
+                searchButton.innerHTML = '<i class="fas fa-search"></i>';
+                searchButton.onclick = function() {
+                    document.getElementById('searchTerm').value = term;
+                    handleSearch();
+                };
+                
+                const deleteButton = document.createElement('button');
+                deleteButton.className = 'btn btn-sm btn-outline-danger';
+                deleteButton.innerHTML = '<i class="fas fa-times"></i>';
+                deleteButton.onclick = function() {
+                    removeFromSearchHistory(index);
+                };
+                
+                buttonGroup.appendChild(searchButton);
+                buttonGroup.appendChild(deleteButton);
+                li.appendChild(buttonGroup);
+                historyList.appendChild(li);
+            });
+        }
+
+        function removeFromSearchHistory(index) {
+            let history = JSON.parse(localStorage.getItem('searchHistory')) || [];
+            history.splice(index, 1);
+            localStorage.setItem('searchHistory', JSON.stringify(history));
+            displaySearchHistory();
+        }
+
+        function clearAllSearchHistory() {
+            localStorage.removeItem('searchHistory');
+            displaySearchHistory();
+        }
+    </script>
+</body>
+</html>
