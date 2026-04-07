@@ -1,0 +1,17 @@
+{
+  "name": "Multi Search Tool",
+  "short_name": "MultiSearch",
+  "description": "Sök på flera svenska marknadsplatser samtidigt.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8f9fa",
+  "theme_color": "#0d6efd",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
