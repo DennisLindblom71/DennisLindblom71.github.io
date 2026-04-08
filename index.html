@@ -178,6 +178,16 @@
           </label>
         </div>
 
+        <!-- Sellpy -->
+        <div class="form-check">
+          <input type="checkbox" id="sellpy" name="searchSites" value="sellpy" class="form-check-input" checked>
+          <label class="form-check-label" for="sellpy">
+            Sellpy
+            <span class="badge bg-info text-dark ms-2">Pris</span>
+            <span class="badge bg-warning text-dark ms-1">Nyast</span>
+          </label>
+        </div>
+
         <hr class="my-3">
 
         <!-- Budi -->
@@ -347,7 +357,7 @@
     function loadPreviousSettings() {
       const savedSearchTerm = localStorage.getItem('searchTerm');
       const savedSortRecent = localStorage.getItem('sortRecent') === 'true';
-      const savedSearchSites = JSON.parse(localStorage.getItem('searchSites')) || ['blocket', 'tradera', 'facebook', 'vinted'];
+      const savedSearchSites = JSON.parse(localStorage.getItem('searchSites')) || ['blocket', 'tradera', 'facebook', 'vinted', 'sellpy'];
       const savedSelectedLocation = localStorage.getItem('location');
       const savedMinPrice = localStorage.getItem('minPrice');
       const savedMaxPrice = localStorage.getItem('maxPrice');
@@ -522,6 +532,15 @@
         if (minPrice) url += `&price_from=${minPrice}`;
         if (maxPrice) url += `&price_to=${maxPrice}`;
         results.push({ label: 'Vinted', url });
+      }
+
+      // Sellpy
+      if (searchSites.includes('sellpy')) {
+        let url = `https://www.sellpy.se/search?query=${encodedTerm}`;
+        if (sortRecent) url += '&sortBy=published';
+        if (minPrice) url += `&minPrice=${minPrice}`;
+        if (maxPrice) url += `&maxPrice=${maxPrice}`;
+        results.push({ label: 'Sellpy', url });
       }
 
       // Bukowskis (path-baserad sök)
