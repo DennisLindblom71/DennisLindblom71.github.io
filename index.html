@@ -9,7 +9,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="favicon.svg">
+  <link rel="icon" href="icon-192.png" sizes="192x192" type="image/png">
+  <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="manifest" href="manifest.json">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
@@ -250,6 +251,27 @@
       <ul id="savedList" class="list-group"></ul>
     </div>
 
+    <!-- Påminnelse-modal -->
+    <div id="reminderModal" class="modal fade" tabindex="-1">
+      <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title"><i class="fas fa-bell me-2"></i>Påminnelse</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Stäng"></button>
+          </div>
+          <div class="modal-body">
+            <p class="mb-2">Påminn mig om att söka efter "<strong id="reminderTermDisplay"></strong>":</p>
+            <div class="d-grid gap-2">
+              <button class="btn btn-outline-primary reminder-opt" data-minutes="30">Om 30 minuter</button>
+              <button class="btn btn-outline-primary reminder-opt" data-minutes="60">Om 1 timme</button>
+              <button class="btn btn-outline-primary reminder-opt" data-minutes="240">Om 4 timmar</button>
+              <button class="btn btn-outline-primary reminder-opt" data-minutes="1440">Om 1 dag</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div id="searchHistory" class="mt-4">
       <div class="d-flex justify-content-between align-items-center">
         <h5 class="mb-0">Sökhistorik:</h5>
@@ -261,6 +283,7 @@
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function () {
       loadPreviousSettings();
@@ -287,6 +310,12 @@
       document.querySelectorAll('input[name="searchSites"]').forEach(cb => {
         cb.addEventListener('change', updateToggleButtonLabel);
       });
+
+      // Begär notifikationstillstånd om det finns aktiva påminnelser
+      const reminders = JSON.parse(localStorage.getItem('reminders')) || [];
+      if (reminders.length > 0 && 'Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
     });
 
     function updateToggleButtonLabel() {
@@ -617,6 +646,25 @@
         li.appendChild(termSpan);
 
         const buttonGroup = document.createElement('div');
+        buttonGroup.className = 'd-flex align-items-center';
+
+        const activeReminder = getActiveReminder(term);
+
+        const reminderButton = document.createElement('button');
+        if (activeReminder) {
+          const timeLeft = formatTimeLeft(activeReminder.dueAt - Date.now());
+          reminderButton.className = 'btn btn-sm btn-warning me-1';
+          reminderButton.innerHTML = '<i class="fas fa-bell"></i> ' + timeLeft;
+          reminderButton.title = 'Avbryt påminnelse';
+          reminderButton.setAttribute('aria-label', 'Avbryt påminnelse för: ' + term);
+          reminderButton.onclick = function() { cancelReminder(term); };
+        } else {
+          reminderButton.className = 'btn btn-sm btn-outline-secondary me-1';
+          reminderButton.innerHTML = '<i class="fas fa-bell"></i>';
+          reminderButton.title = 'Sätt påminnelse';
+          reminderButton.setAttribute('aria-label', 'Sätt påminnelse för: ' + term);
+          reminderButton.onclick = function() { openReminderModal(term); };
+        }
 
         const searchButton = document.createElement('button');
         searchButton.className = 'btn btn-sm btn-outline-primary me-1';
@@ -637,12 +685,101 @@
           removeSavedSearch(index);
         };
 
+        buttonGroup.appendChild(reminderButton);
         buttonGroup.appendChild(searchButton);
         buttonGroup.appendChild(deleteButton);
         li.appendChild(buttonGroup);
         savedList.appendChild(li);
       });
     }
+
+    // --- Påminnelser ---
+    let reminderTerm = '';
+
+    function openReminderModal(term) {
+      reminderTerm = term;
+      document.getElementById('reminderTermDisplay').textContent = term;
+      const modal = new bootstrap.Modal(document.getElementById('reminderModal'));
+      modal.show();
+    }
+
+    document.querySelectorAll('.reminder-opt').forEach(btn => {
+      btn.addEventListener('click', function () {
+        const minutes = parseInt(this.dataset.minutes);
+        setReminder(reminderTerm, minutes);
+        bootstrap.Modal.getInstance(document.getElementById('reminderModal')).hide();
+      });
+    });
+
+    function setReminder(term, minutes) {
+      if (Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+
+      const reminders = JSON.parse(localStorage.getItem('reminders')) || [];
+      const dueAt = Date.now() + minutes * 60 * 1000;
+      reminders.push({ term, dueAt });
+      localStorage.setItem('reminders', JSON.stringify(reminders));
+
+      displaySavedSearches();
+      checkReminders();
+    }
+
+    function checkReminders() {
+      const reminders = JSON.parse(localStorage.getItem('reminders')) || [];
+      const now = Date.now();
+      const remaining = [];
+
+      reminders.forEach(r => {
+        if (r.dueAt <= now) {
+          showNotification(r.term);
+        } else {
+          remaining.push(r);
+          const delay = r.dueAt - now;
+          if (delay < 60 * 60 * 1000) {
+            setTimeout(() => checkReminders(), delay);
+          }
+        }
+      });
+
+      localStorage.setItem('reminders', JSON.stringify(remaining));
+      if (remaining.length !== reminders.length) {
+        displaySavedSearches();
+      }
+    }
+
+    function showNotification(term) {
+      if (Notification.permission === 'granted') {
+        new Notification('Multi Search Tool', {
+          body: `Dags att kolla "${term}" igen!`,
+          icon: 'icon-192.png'
+        });
+      }
+    }
+
+    function cancelReminder(term) {
+      let reminders = JSON.parse(localStorage.getItem('reminders')) || [];
+      reminders = reminders.filter(r => r.term.toLowerCase() !== term.toLowerCase());
+      localStorage.setItem('reminders', JSON.stringify(reminders));
+      displaySavedSearches();
+    }
+
+    function getActiveReminder(term) {
+      const reminders = JSON.parse(localStorage.getItem('reminders')) || [];
+      return reminders.find(r => r.term.toLowerCase() === term.toLowerCase());
+    }
+
+    function formatTimeLeft(ms) {
+      const mins = Math.round(ms / 60000);
+      if (mins < 60) return `${mins} min`;
+      const hours = Math.round(mins / 60);
+      if (hours < 24) return `${hours}h`;
+      return `${Math.round(hours / 24)}d`;
+    }
+
+    // Kolla påminnelser vid start och var 30:e sekund
+    checkReminders();
+    setInterval(checkReminders, 30000);
 
     // Registrera Service Worker för PWA/offline-stöd
     if ('serviceWorker' in navigator) {
