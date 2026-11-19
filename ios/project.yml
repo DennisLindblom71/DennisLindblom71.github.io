@@ -1,6 +1,7 @@
 name: MultiSearch
 options:
   bundleIdPrefix: se.dennislindblom
+  developmentLanguage: sv
   deploymentTarget:
     iOS: "17.0"
 settings:
@@ -17,6 +18,8 @@ targets:
       path: MultiSearch/Info.plist
       properties:
         CFBundleDisplayName: Multi Search
+        CFBundleDevelopmentRegion: sv
+        CFBundleLocalizations: [sv]
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UILaunchScreen: {}

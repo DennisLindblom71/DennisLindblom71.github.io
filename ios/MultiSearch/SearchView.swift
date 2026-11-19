@@ -26,6 +26,22 @@ struct SearchView: View {
                     .disabled(!store.query.canSearch)
                 }
 
+                if !store.listings.isEmpty {
+                    Section {
+                        NavigationLink {
+                            ListingsView()
+                        } label: {
+                            HStack {
+                                Label("Sparade annonser", systemImage: "heart.fill")
+                                    .foregroundStyle(.primary)
+                                    .symbolRenderingMode(.multicolor)
+                                Spacer()
+                                Text("\(store.listings.count)").foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+
                 if !store.saved.isEmpty { savedSection }
                 if !store.history.isEmpty { historySection }
             }

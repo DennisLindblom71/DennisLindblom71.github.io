@@ -10,6 +10,7 @@ i en egen flik inne i appen.
 - Länkar stannar i appen (inga hopp till Blocket-/Facebook-appen)
 - Inloggningar (t.ex. Facebook) sparas mellan sökningar
 - Historik och sparade sökningar med alla filter
+- Spara annonser med ♥ – titel, bild och pris hämtas från sidan och samlas i en lista oavsett sajt
 - Påminnelser: om 1 h / 4 h / i morgon, eller varje dag kl 08 eller 18.
   Tryck på notisen så öppnas sökningen direkt.
 

@@ -4,6 +4,8 @@ struct ResultsView: View {
     let run: SearchRun
     @Environment(AppStore.self) private var store
     @Environment(\.dismiss) private var dismiss
+    @State private var toast: String?
+    @State private var isSavingListing = false
 
     var body: some View {
         NavigationStack {
@@ -13,6 +15,8 @@ struct ResultsView: View {
                 pagesStack
             }
             .safeAreaInset(edge: .bottom, spacing: 0) { bottomBar }
+            .overlay(alignment: .bottom) { toastView }
+            .sensoryFeedback(.success, trigger: toast) { _, new in new != nil }
             .navigationTitle(run.query.trimmedTerm)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -116,21 +120,75 @@ struct ResultsView: View {
 
             Spacer(minLength: 8)
 
-            barButton("arrow.clockwise", "Ladda om sökningen", enabled: page != nil) {
-                page?.goHome()
+            let saved = store.isListingSaved(page?.currentURL)
+            Button {
+                toggleListing(page)
+            } label: {
+                Image(systemName: saved ? "heart.fill" : "heart")
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(saved ? .red : .accentColor)
+                    .frame(width: 40, height: 40)
+                    .symbolEffect(.bounce, value: saved)
             }
-            if let url = page?.currentURL {
-                ShareLink(item: url) {
-                    Image(systemName: "square.and.arrow.up")
-                        .frame(width: 40, height: 40)
+            .disabled(page?.currentURL == nil || isSavingListing)
+            .accessibilityLabel(saved ? "Ta bort sparad annons" : "Spara annons")
+
+            Menu {
+                Button("Ladda om sökningen", systemImage: "arrow.clockwise") { page?.goHome() }
+                if let url = page?.currentURL {
+                    ShareLink(item: url) { Label("Dela", systemImage: "square.and.arrow.up") }
+                    Link(destination: url) { Label("Öppna i Safari", systemImage: "safari") }
                 }
-                .accessibilityLabel("Dela eller öppna i Safari")
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .font(.body.weight(.medium))
+                    .frame(width: 40, height: 40)
             }
+            .accessibilityLabel("Fler val")
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .background(.bar)
         .overlay(alignment: .top) { Divider() }
+    }
+
+    private func toggleListing(_ page: WebPage?) {
+        guard let page, let url = page.currentURL else { return }
+        if store.isListingSaved(url) {
+            store.deleteListing(url: url)
+            showToast("Borttagen från sparade")
+            return
+        }
+        isSavingListing = true
+        Task {
+            if let listing = await page.extractListing() {
+                store.saveListing(listing)
+                showToast("Annons sparad")
+            }
+            isSavingListing = false
+        }
+    }
+
+    private func showToast(_ text: String) {
+        withAnimation(.spring(duration: 0.3)) { toast = text }
+        Task {
+            try? await Task.sleep(for: .seconds(1.6))
+            withAnimation(.easeOut) { if toast == text { toast = nil } }
+        }
+    }
+
+    @ViewBuilder
+    private var toastView: some View {
+        if let toast {
+            Label(toast, systemImage: toast == "Annons sparad" ? "heart.fill" : "heart.slash")
+                .font(.subheadline.weight(.semibold))
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(.regularMaterial, in: Capsule())
+                .shadow(radius: 6, y: 2)
+                .padding(.bottom, 70)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
     }
 
     private func barButton(_ icon: String, _ label: String, enabled: Bool,

@@ -10,6 +10,7 @@ final class AppStore {
     var query: SearchQuery
     private(set) var history: [SearchQuery]
     private(set) var saved: [SavedSearch]
+    private(set) var listings: [SavedListing]
     var activeRun: SearchRun?
 
     private let defaults = UserDefaults.standard
@@ -20,6 +21,7 @@ final class AppStore {
         query = last
         history = Self.load([SearchQuery].self, key: "history") ?? []
         saved = Self.load([SavedSearch].self, key: "saved") ?? []
+        listings = Self.load([SavedListing].self, key: "listings") ?? []
         pruneReminders()
     }
 
@@ -76,6 +78,33 @@ final class AppStore {
         search(saved[i].query)
     }
 
+    // MARK: Sparade annonser
+
+    func isListingSaved(_ url: URL?) -> Bool {
+        guard let key = url?.listingKey else { return false }
+        return listings.contains { $0.url.listingKey == key }
+    }
+
+    func saveListing(_ listing: SavedListing) {
+        if let old = listings.first(where: { $0.url.listingKey == listing.url.listingKey }) {
+            ListingFiles.delete(old)
+            listings.removeAll { $0.id == old.id }
+        }
+        listings.insert(listing, at: 0)
+        persist()
+    }
+
+    func deleteListing(_ listing: SavedListing) {
+        ListingFiles.delete(listing)
+        listings.removeAll { $0.id == listing.id }
+        persist()
+    }
+
+    func deleteListing(url: URL) {
+        let key = url.listingKey
+        listings.filter { $0.url.listingKey == key }.forEach(deleteListing)
+    }
+
     // MARK: Påminnelser
 
     func setReminder(_ item: SavedSearch, minutes: Int) {
@@ -117,6 +146,7 @@ final class AppStore {
         Self.store(query, key: "lastSearch")
         Self.store(history, key: "history")
         Self.store(saved, key: "saved")
+        Self.store(listings, key: "listings")
     }
 
     private static func load<T: Decodable>(_ type: T.Type, key: String) -> T? {

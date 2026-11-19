@@ -14,6 +14,7 @@
 		83BFE8A44B2164F9C777757B /* AppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B045BABEB9EBBFF53D7B3BC9 /* AppStore.swift */; };
 		9E1A65319486736B122B97D9 /* SearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F9C726B8DE18600030FFDD2 /* SearchView.swift */; };
 		D0C4A3703007B690AA4A09F5 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 93BCA0195DFCB2EDFC3AC82F /* Assets.xcassets */; };
+		DEB61817A15B6C9EAEDC2A43 /* Listings.swift in Sources */ = {isa = PBXBuildFile; fileRef = B810E75BC101E3702C03E339 /* Listings.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -23,6 +24,7 @@
 		A5BCBCCFBBA0A8A4E2FC92E8 /* MultiSearchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultiSearchApp.swift; sourceTree = "<group>"; };
 		A5D771617BBE14BE52D48FA5 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		B045BABEB9EBBFF53D7B3BC9 /* AppStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStore.swift; sourceTree = "<group>"; };
+		B810E75BC101E3702C03E339 /* Listings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Listings.swift; sourceTree = "<group>"; };
 		D5EADA389ED63CCB98FD8CC6 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		E863F619E68132F74498250A /* MultiSearch.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = MultiSearch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F68B39C7304061FA4DFA9537 /* WebPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebPage.swift; sourceTree = "<group>"; };
@@ -51,6 +53,7 @@
 				B045BABEB9EBBFF53D7B3BC9 /* AppStore.swift */,
 				93BCA0195DFCB2EDFC3AC82F /* Assets.xcassets */,
 				D5EADA389ED63CCB98FD8CC6 /* Info.plist */,
+				B810E75BC101E3702C03E339 /* Listings.swift */,
 				A5D771617BBE14BE52D48FA5 /* Models.swift */,
 				A5BCBCCFBBA0A8A4E2FC92E8 /* MultiSearchApp.swift */,
 				413A60AC5197FCBB657045A7 /* ResultsView.swift */,
@@ -88,7 +91,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastUpgradeCheck = 1430;
+				LastUpgradeCheck = 1600;
 				TargetAttributes = {
 					6CCE4DD0941DBC3F6428C5DF = {
 						ProvisioningStyle = Automatic;
@@ -96,11 +99,11 @@
 				};
 			};
 			buildConfigurationList = 17AE0AACCE79B00FB68D4140 /* Build configuration list for PBXProject "MultiSearch" */;
-			developmentRegion = en;
+			developmentRegion = sv;
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				Base,
-				en,
+				sv,
 			);
 			mainGroup = 9EB3EA75BF1E349C190E723B;
 			minimizedProjectReferenceProxies = 1;
@@ -131,6 +134,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				83BFE8A44B2164F9C777757B /* AppStore.swift in Sources */,
+				DEB61817A15B6C9EAEDC2A43 /* Listings.swift in Sources */,
 				28158E23189A39DCAFA9BB8A /* Models.swift in Sources */,
 				14628EE08F09A747196A084E /* MultiSearchApp.swift in Sources */,
 				10FB3FA4E37B17CCB80ECC20 /* ResultsView.swift in Sources */,
