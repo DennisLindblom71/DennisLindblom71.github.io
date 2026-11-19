@@ -43,7 +43,8 @@ struct ResultsView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(run.pages) { page in
-                        SiteChip(page: page, isSelected: page.site == run.selected) {
+                        SiteChip(page: page, isSelected: page.site == run.selected,
+                                 newCount: run.newBySite[page.site.rawValue] ?? 0) {
                             run.select(page.site)
                         }
                         .id(page.site)
@@ -206,6 +207,7 @@ struct ResultsView: View {
 struct SiteChip: View {
     let page: WebPage
     let isSelected: Bool
+    var newCount = 0
     let action: () -> Void
 
     var body: some View {
@@ -219,6 +221,14 @@ struct SiteChip: View {
                         .foregroundStyle(isSelected ? .white : .green)
                 }
                 Text(page.site.label)
+                if newCount > 0 && !page.viewed {
+                    Text("\(newCount) nya")
+                        .font(.caption2.weight(.bold))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(.red))
+                        .foregroundStyle(.white)
+                }
             }
             .font(.subheadline.weight(.medium))
             .padding(.horizontal, 12)

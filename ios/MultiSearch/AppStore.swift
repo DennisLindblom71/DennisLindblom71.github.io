@@ -12,6 +12,9 @@ final class AppStore {
     private(set) var saved: [SavedSearch]
     private(set) var listings: [SavedListing]
     var activeRun: SearchRun?
+    private(set) var isCheckingWatches = false
+    /// Annons-id:n som redan setts, per sparad sökning och sajt
+    private var seen: [String: [String: [String]]]
 
     private let defaults = UserDefaults.standard
 
@@ -22,12 +25,13 @@ final class AppStore {
         history = Self.load([SearchQuery].self, key: "history") ?? []
         saved = Self.load([SavedSearch].self, key: "saved") ?? []
         listings = Self.load([SavedListing].self, key: "listings") ?? []
+        seen = Self.load([String: [String: [String]]].self, key: "seen") ?? [:]
         pruneReminders()
     }
 
     // MARK: Sökning
 
-    func search(_ q: SearchQuery? = nil) {
+    func search(_ q: SearchQuery? = nil, newBySite: [String: Int] = [:]) {
         var q = q ?? query
         q.term = q.trimmedTerm
         guard q.canSearch else { return }
@@ -36,7 +40,7 @@ final class AppStore {
         history.insert(q, at: 0)
         history = Array(history.prefix(15))
         persist()
-        activeRun = SearchRun(query: q)
+        activeRun = SearchRun(query: q, newBySite: newBySite)
     }
 
     func removeHistory(at offsets: IndexSet) {
@@ -67,15 +71,96 @@ final class AppStore {
     func deleteSaved(_ item: SavedSearch) {
         Reminders.cancel(item.id)
         saved.removeAll { $0.id == item.id }
+        seen[item.id.uuidString] = nil
         persist()
     }
 
-    func openSaved(id: UUID) {
-        guard let i = saved.firstIndex(where: { $0.id == id }) else { return }
-        if saved[i].dailyHour == nil { saved[i].reminderAt = nil }
+    /// Öppnar en sparad sökning och visar vilka sajter som har nya annonser
+    func openSaved(_ item: SavedSearch) {
+        guard let i = saved.firstIndex(where: { $0.id == item.id }) else { return }
+        let news = saved[i].newBySite
+        saved[i].newBySite = [:]
+        if saved[i].dailyHour == nil, (saved[i].reminderAt.map { $0 <= .now } ?? false) {
+            saved[i].reminderAt = nil
+        }
         persist()
         activeRun = nil
-        search(saved[i].query)
+        search(saved[i].query, newBySite: news)
+    }
+
+    func openSaved(id: UUID) {
+        guard let item = saved.first(where: { $0.id == id }) else { return }
+        openSaved(item)
+    }
+
+    // MARK: Bevakning
+
+    func setWatching(_ item: SavedSearch, _ on: Bool) {
+        update(item.id) {
+            $0.watching = on
+            if !on { $0.newBySite = [:]; $0.lastChecked = nil }
+        }
+        if on {
+            Task {
+                _ = try? await UNUserNotificationCenter.current()
+                    .requestAuthorization(options: [.alert, .sound, .badge])
+                await checkWatches(includeBrowserSites: true, only: item.id)
+            }
+        } else {
+            seen[item.id.uuidString] = nil
+            persist()
+        }
+    }
+
+    /// Kollar alla bevakade sökningar. Första gången sparas bara vilka annonser som finns;
+    /// därefter räknas och notifieras de som är nya.
+    func checkWatches(includeBrowserSites: Bool, only: UUID? = nil) async {
+        guard !isCheckingWatches else { return }
+        isCheckingWatches = true
+        defer { isCheckingWatches = false }
+
+        for item in saved where item.watching && (only == nil || item.id == only) {
+            if Task.isCancelled { break }
+            // Sortera alltid på nyast så att nya annonser hamnar på första sidan
+            var q = item.query
+            q.sortRecent = true
+            var known = seen[item.id.uuidString] ?? [:]
+            var fresh: [Site: Int] = [:]
+
+            for site in item.watchableSites {
+                if ListingScanner.needsBrowser(site) && !includeBrowserSites { continue }
+                guard let url = site.url(for: q),
+                      let ids = await ListingScanner.ids(for: site, url: url) else { continue }
+                let old = known[site.rawValue] ?? []
+                if !old.isEmpty {
+                    let oldSet = Set(old)
+                    let newIDs = ids.filter { !oldSet.contains($0) }
+                    if !newIDs.isEmpty { fresh[site] = newIDs.count }
+                }
+                // Behåll gamla id:n också, så att annonser som glider in och ut inte räknas två gånger
+                var merged = ids
+                var mergedSet = Set(ids)
+                for id in old where mergedSet.insert(id).inserted { merged.append(id) }
+                known[site.rawValue] = Array(merged.prefix(800))
+            }
+
+            seen[item.id.uuidString] = known
+            update(item.id) { s in
+                s.lastChecked = .now
+                for (site, n) in fresh { s.newBySite[site.rawValue, default: 0] += n }
+            }
+            if !fresh.isEmpty {
+                await Watcher.notify(item, counts: fresh)
+            }
+        }
+        persist()
+    }
+
+    /// Kolla när appen öppnas, men inte oftare än var 10:e minut
+    func checkWatchesIfStale() {
+        let stale = saved.contains { $0.watching && ($0.lastChecked.map { -$0.timeIntervalSinceNow > 600 } ?? true) }
+        guard stale else { return }
+        Task { await checkWatches(includeBrowserSites: true) }
     }
 
     // MARK: Sparade annonser
@@ -98,6 +183,23 @@ final class AppStore {
         ListingFiles.delete(listing)
         listings.removeAll { $0.id == listing.id }
         persist()
+    }
+
+    /// Hämtar bilder till annonser som sparades innan bildhämtningen fixades
+    func repairListingImages() async {
+        for listing in listings {
+            let hasFile = listing.snapshotURL.map { FileManager.default.fileExists(atPath: $0.path) } ?? false
+            guard !hasFile, let url = listing.imageURL else { continue }
+            for candidate in ListingImages.candidates([url.absoluteString], base: listing.url) {
+                if let file = await ListingImages.downloadThumbnail(candidate, id: listing.id),
+                   let i = listings.firstIndex(where: { $0.id == listing.id }) {
+                    listings[i].snapshotFile = file
+                    listings[i].imageURL = candidate
+                    persist()
+                    break
+                }
+            }
+        }
     }
 
     func deleteListing(url: URL) {
@@ -147,6 +249,7 @@ final class AppStore {
         Self.store(history, key: "history")
         Self.store(saved, key: "saved")
         Self.store(listings, key: "listings")
+        Self.store(seen, key: "seen")
     }
 
     private static func load<T: Decodable>(_ type: T.Type, key: String) -> T? {

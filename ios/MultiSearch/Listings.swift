@@ -10,7 +10,7 @@ struct SavedListing: Codable, Identifiable, Hashable {
     var title: String
     var price: String?
     var imageURL: URL?
-    /// Skärmdump som används när sidan saknar bild
+    /// Lokalt sparad miniatyr (nedladdad bild eller skärmdump)
     var snapshotFile: String?
     var savedAt = Date()
 
@@ -43,9 +43,10 @@ extension URL {
 
 private struct PageMeta: Decodable {
     var title: String?
-    var image: String?
+    var images: [String]?
     var price: String?
     var currency: String?
+    var description: String?
 }
 
 extension WebPage {
@@ -64,17 +65,42 @@ extension WebPage {
             site: site,
             url: url,
             title: Self.cleanTitle(meta.title ?? webView.title ?? "", site: site),
-            price: Self.formatPrice(meta.price, currency: meta.currency),
-            imageURL: meta.image.flatMap { URL(string: $0, relativeTo: url)?.absoluteURL }
+            price: Self.formatPrice(meta.price, currency: meta.currency)
+                ?? Self.priceFromDescription(meta.description)
         )
         if listing.title.isEmpty { listing.title = site.label }
 
-        if listing.imageURL == nil {
+        // Prova bildkandidaterna i tur och ordning och spara den första som går att hämta.
+        // (Tradera anger http-adresser och Sellpys og:image ger 403, så vi kan inte lita på den första.)
+        let candidates = Self.imageCandidates(meta.images ?? [], base: url)
+        for candidate in candidates {
+            if let file = await Self.downloadThumbnail(candidate, id: listing.id) {
+                listing.imageURL = candidate
+                listing.snapshotFile = file
+                break
+            }
+        }
+        if listing.snapshotFile == nil {
             listing.snapshotFile = await saveSnapshot(id: listing.id)
         }
         return listing
     }
 
+    private static func imageCandidates(_ raw: [String], base: URL) -> [URL] {
+        ListingImages.candidates(raw, base: base)
+    }
+
+    private static func downloadThumbnail(_ url: URL, id: UUID) async -> String? {
+        await ListingImages.downloadThumbnail(url, id: id)
+    }
+
+    /// Tradera skriver priset i beskrivningen: "Pris: 50 kr."
+    private static func priceFromDescription(_ text: String?) -> String? {
+        guard let text,
+              let match = text.range(of: #"Pris:\s*[\d\s ]+kr"#, options: .regularExpression) else { return nil }
+        return String(text[match]).replacingOccurrences(of: "Pris:", with: "")
+            .trimmingCharacters(in: .whitespaces)
+    }
     private func saveSnapshot(id: UUID) async -> String? {
         let config = WKSnapshotConfiguration()
         config.snapshotWidth = 300
@@ -122,7 +148,10 @@ extension WebPage {
         return el ? el.getAttribute('content') : null;
       };
       let title = m('og:title') || m('twitter:title') || document.title;
-      let image = m('og:image') || m('og:image:url') || m('twitter:image');
+      const images = [];
+      const add = u => { if (u && typeof u === 'string' && !u.startsWith('data:')) images.push(u); };
+      add(m('og:image:secure_url')); add(m('og:image')); add(m('og:image:url'));
+      add(m('twitter:image:secure_url')); add(m('twitter:image'));
       let price = m('product:price:amount') || m('og:price:amount') || m('price');
       let currency = m('product:price:currency') || m('og:price:currency') || m('priceCurrency');
       const walk = o => {
@@ -136,18 +165,25 @@ extension WebPage {
             currency = currency || off.priceCurrency || null;
           }
         }
-        if (!image && o.image) {
+        if (o.image) {
           const img = Array.isArray(o.image) ? o.image[0] : o.image;
-          image = typeof img === 'string' ? img : (img && img.url) || null;
+          add(typeof img === 'string' ? img : (img && img.url) || null);
         }
         if (!title && o.name) title = o.name;
       };
       document.querySelectorAll('script[type="application/ld+json"]').forEach(s => {
         try { walk(JSON.parse(s.textContent)); } catch (e) {}
       });
+      // Största bilden som faktiskt visas på sidan, som reserv
+      [...document.images]
+        .filter(i => i.complete && i.naturalWidth >= 250 && i.naturalHeight >= 150)
+        .sort((a, b) => b.naturalWidth * b.naturalHeight - a.naturalWidth * a.naturalHeight)
+        .slice(0, 3)
+        .forEach(i => add(i.currentSrc || i.src));
       return JSON.stringify({
         title: title || null,
-        image: image || null,
+        images,
+        description: m('og:description') || m('description'),
         price: price != null ? String(price) : null,
         currency: currency || null
       });
@@ -201,6 +237,7 @@ struct ListingsView: View {
             }
         }
         .navigationTitle("Sparade annonser")
+        .task { await store.repairListingImages() }
         .toolbar {
             if sitesInUse.count > 1 {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -258,7 +295,9 @@ struct ListingThumbnail: View {
     var body: some View {
         ZStack {
             Color(.secondarySystemBackground)
-            if let url = listing.imageURL {
+            if let file = listing.snapshotURL, let image = UIImage(contentsOfFile: file.path) {
+                Image(uiImage: image).resizable().scaledToFill()
+            } else if let url = listing.imageURL {
                 AsyncImage(url: url) { phase in
                     if let image = phase.image {
                         image.resizable().scaledToFill()
@@ -266,8 +305,6 @@ struct ListingThumbnail: View {
                         placeholder
                     }
                 }
-            } else if let file = listing.snapshotURL, let image = UIImage(contentsOfFile: file.path) {
-                Image(uiImage: image).resizable().scaledToFill()
             } else {
                 placeholder
             }
@@ -324,6 +361,49 @@ struct ListingDetailView: View {
                     .accessibilityLabel("Ta bort från sparade")
                 }
             }
+        }
+    }
+}
+
+// MARK: Bilder
+
+enum ListingImages {
+    /// Gör om bildadresser till sådana som faktiskt går att hämta
+    static func candidates(_ raw: [String], base: URL) -> [URL] {
+        var seen = Set<String>()
+        return raw.compactMap { s -> URL? in
+            let s = s.trimmingCharacters(in: .whitespaces)
+            guard var c = URLComponents(string: s) else { return nil }
+            if c.scheme == nil { return URL(string: s, relativeTo: base)?.absoluteURL }
+            // Tradera anger http-adresser, som iOS blockerar
+            if c.scheme == "http" { c.scheme = "https" }
+            // Sellpys og:image pekar på en S3-hink som ger 403; samma bild finns på deras bildserver
+            if c.host == "sellpy-parse-prod-files.s3.amazonaws.com" { c.host = "prod.images.sellpy.net" }
+            return c.url
+        }
+        .filter { $0.scheme == "https" && seen.insert($0.absoluteString).inserted }
+    }
+
+    /// Laddar ner bilden, skalar ner den och sparar den lokalt så att den finns kvar
+    /// även om annonsen tas bort.
+    static func downloadThumbnail(_ url: URL, id: UUID) async -> String? {
+        var request = URLRequest(url: url, timeoutInterval: 10)
+        request.setValue(ListingScanner.userAgent, forHTTPHeaderField: "User-Agent")
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              (response as? HTTPURLResponse)?.statusCode == 200,
+              let image = UIImage(data: data) else { return nil }
+        let scale = min(1, 400 / max(image.size.width, image.size.height))
+        let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+        let thumb = UIGraphicsImageRenderer(size: size).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: size))
+        }
+        guard let jpeg = thumb.jpegData(compressionQuality: 0.75) else { return nil }
+        let name = "\(id.uuidString).jpg"
+        do {
+            try jpeg.write(to: ListingFiles.directory.appendingPathComponent(name))
+            return name
+        } catch {
+            return nil
         }
     }
 }

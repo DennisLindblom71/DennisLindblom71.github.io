@@ -170,8 +170,33 @@ struct SavedSearch: Codable, Identifiable, Hashable {
     var reminderAt: Date?
     /// Daglig påminnelse vid denna timme
     var dailyHour: Int?
+    /// Bevakning: kolla efter nya annonser
+    var watching = false
+    /// Antal nya annonser per sajt (Site.rawValue) sedan du senast öppnade sökningen
+    var newBySite: [String: Int] = [:]
+    var lastChecked: Date?
 
     var hasReminder: Bool { dailyHour != nil || (reminderAt.map { $0 > .now } ?? false) }
+    var newCount: Int { newBySite.values.reduce(0, +) }
+
+    /// Sajter i sökningen som går att bevaka
+    var watchableSites: [Site] { query.orderedSites.filter(ListingScanner.isSupported) }
+
+    init(query: SearchQuery) {
+        self.query = query
+    }
+
+    // Egen avkodning så att sökningar sparade av äldre versioner fortfarande läses in
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        query = try c.decode(SearchQuery.self, forKey: .query)
+        reminderAt = try c.decodeIfPresent(Date.self, forKey: .reminderAt)
+        dailyHour = try c.decodeIfPresent(Int.self, forKey: .dailyHour)
+        watching = try c.decodeIfPresent(Bool.self, forKey: .watching) ?? false
+        newBySite = try c.decodeIfPresent([String: Int].self, forKey: .newBySite) ?? [:]
+        lastChecked = try c.decodeIfPresent(Date.self, forKey: .lastChecked)
+    }
 }
 
 extension String {

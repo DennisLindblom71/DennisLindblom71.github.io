@@ -46,6 +46,10 @@ struct SearchView: View {
                 if !store.history.isEmpty { historySection }
             }
             .navigationTitle("Multi Search")
+            .refreshable {
+                // Dra ner för att kolla bevakningarna
+                await store.checkWatches(includeBrowserSites: true)
+            }
             .scrollDismissesKeyboard(.interactively)
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) {
@@ -154,16 +158,24 @@ struct SearchView: View {
     // MARK: Sparade sökningar
 
     private var savedSection: some View {
-        Section("Sparade sökningar") {
+        Section {
             ForEach(store.saved) { item in
                 HStack {
-                    Button { store.search(item.query) } label: {
+                    Button { store.openSaved(item) } label: {
                         QueryRow(query: item.query, saved: item)
                     }
                     .buttonStyle(.borderless)
                     .tint(.primary)
 
                     Spacer()
+                    if item.newCount > 0 {
+                        Text("\(item.newCount) nya")
+                            .font(.caption.weight(.bold))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Capsule().fill(.red))
+                            .foregroundStyle(.white)
+                    }
                     reminderMenu(for: item)
                 }
                 .swipeActions {
@@ -171,12 +183,46 @@ struct SearchView: View {
                         Label("Ta bort", systemImage: "trash")
                     }
                 }
+                .swipeActions(edge: .leading) {
+                    Button { store.setWatching(item, !item.watching) } label: {
+                        Label(item.watching ? "Sluta bevaka" : "Bevaka",
+                              systemImage: item.watching ? "eye.slash" : "eye")
+                    }
+                    .tint(.indigo)
+                }
             }
+        } header: {
+            HStack {
+                Text("Sparade sökningar")
+                Spacer()
+                if store.saved.contains(where: \.watching) {
+                    if store.isCheckingWatches {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Button("Kolla nu") {
+                            Task { await store.checkWatches(includeBrowserSites: true) }
+                        }
+                        .font(.caption)
+                        .textCase(nil)
+                    }
+                }
+            }
+        } footer: {
+            Text("Bevaka en sökning så kollar appen efter nya annonser och skickar en notis. Blocket, Tradera, Vinted och Auctionet kollas även i bakgrunden; Sellpy och Facebook när appen är öppen.")
         }
     }
 
     private func reminderMenu(for item: SavedSearch) -> some View {
         Menu {
+            Toggle(isOn: Binding(
+                get: { item.watching },
+                set: { store.setWatching(item, $0) }
+            )) {
+                Label("Bevaka nya annonser", systemImage: "eye")
+            }
+            .disabled(item.watchableSites.isEmpty)
+
+            Divider()
             if item.hasReminder {
                 Button("Ta bort påminnelse", systemImage: "bell.slash", role: .destructive) {
                     store.cancelReminder(item)
@@ -188,11 +234,11 @@ struct SearchView: View {
             Button("Varje dag kl 08") { store.setDailyReminder(item, hour: 8) }
             Button("Varje dag kl 18") { store.setDailyReminder(item, hour: 18) }
         } label: {
-            Image(systemName: item.hasReminder ? "bell.fill" : "bell")
-                .foregroundStyle(item.hasReminder ? .orange : .secondary)
+            Image(systemName: item.watching ? "eye.fill" : (item.hasReminder ? "bell.fill" : "bell"))
+                .foregroundStyle(item.watching ? .indigo : (item.hasReminder ? .orange : .secondary))
                 .padding(6)
         }
-        .accessibilityLabel(item.hasReminder ? "Ändra påminnelse" : "Sätt påminnelse")
+        .accessibilityLabel("Bevakning och påminnelser")
     }
 
     // MARK: Historik
@@ -237,6 +283,19 @@ struct QueryRow: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             if let saved {
+                if saved.watching {
+                    Label {
+                        if let checked = saved.lastChecked {
+                            Text("Bevakas · kollad \(checked, format: .relative(presentation: .named))")
+                        } else {
+                            Text("Bevakas")
+                        }
+                    } icon: {
+                        Image(systemName: "eye.fill")
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.indigo)
+                }
                 if let hour = saved.dailyHour {
                     Label("Varje dag kl \(String(format: "%02d", hour))", systemImage: "bell.fill")
                         .font(.caption)

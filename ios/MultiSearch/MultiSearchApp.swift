@@ -1,3 +1,4 @@
+import BackgroundTasks
 import SwiftUI
 import UserNotifications
 
@@ -13,7 +14,15 @@ struct MultiSearchApp: App {
                 .environment(store)
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { store.pruneReminders() }
+            switch phase {
+            case .active:
+                store.pruneReminders()
+                store.checkWatchesIfStale()
+            case .background:
+                if store.saved.contains(where: \.watching) { Watcher.schedule() }
+            default:
+                break
+            }
         }
     }
 }
@@ -22,6 +31,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        Watcher.register()
         return true
     }
 

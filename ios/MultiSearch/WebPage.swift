@@ -10,14 +10,19 @@ final class SearchRun: Identifiable {
     let query: SearchQuery
     let pages: [WebPage]
     private(set) var selected: Site
+    /// Nya annonser per sajt från bevakningen (Site.rawValue)
+    let newBySite: [String: Int]
 
-    init(query: SearchQuery) {
+    init(query: SearchQuery, newBySite: [String: Int] = [:]) {
         self.query = query
+        self.newBySite = newBySite
         pages = query.orderedSites.compactMap { site in
             site.url(for: query).map { WebPage(site: site, url: $0) }
         }
-        selected = pages.first?.site ?? .blocket
-        pages.first?.viewed = true
+        // Börja på den första sajten som har nya annonser
+        let start = pages.first { (newBySite[$0.site.rawValue] ?? 0) > 0 } ?? pages.first
+        selected = start?.site ?? .blocket
+        start?.viewed = true
     }
 
     var selectedPage: WebPage? { pages.first { $0.site == selected } }

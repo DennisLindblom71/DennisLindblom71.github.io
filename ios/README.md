@@ -13,6 +13,17 @@ i en egen flik inne i appen.
 - Spara annonser med ♥ – titel, bild och pris hämtas från sidan och samlas i en lista oavsett sajt
 - Påminnelser: om 1 h / 4 h / i morgon, eller varje dag kl 08 eller 18.
   Tryck på notisen så öppnas sökningen direkt.
+- Bevakning av sparade sökningar: appen kollar efter nya annonser och skickar en notis
+  ("3 nya annonser för "cykel" – Blocket 1 · Tradera 2"). Svep höger på en sparad sökning
+  eller använd 👁-menyn. Dra ner på startsidan eller tryck "Kolla nu" för att kolla direkt.
+  - Blocket, Tradera, Vinted och Auctionet läses direkt från söksidans HTML och kollas
+    även i bakgrunden (iOS bestämmer när, oftast några gånger per dag).
+  - Sellpy och Facebook bygger sidan med JavaScript och kollas bara när appen är öppen.
+    Facebook kräver att du är inloggad i appen.
+  - Budi, PS Auction, Pantbanken och Bukowskis stöds inte än.
+
+Mönstren för annonslänkar finns i `ListingScanner.pattern(for:)` i `Watch.swift` –
+uppdatera dem om en sajt byter adressformat.
 
 ## Bygga
 Projektet genereras med [XcodeGen](https://github.com/yonaskolb/XcodeGen) från `project.yml`:
